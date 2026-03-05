@@ -1,6 +1,7 @@
 uniform sampler2D dayTexture;
 uniform sampler2D nightTexture;
 uniform sampler2D bumpTexture;
+uniform sampler2D visitedMask;
 uniform vec3 sunDirection;
 
 varying vec2 vUv;
@@ -10,26 +11,34 @@ varying vec3 vPosition;
 void main() {
   vec3 dayColor = texture2D(dayTexture, vUv).rgb;
   vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+  float visited = step(0.5, texture2D(visitedMask, vUv).r);
 
-  // Desaturate and darken the day texture for the base "unexplored" look
-  float luminance = dot(dayColor, vec3(0.299, 0.587, 0.114));
-  vec3 desaturated = mix(vec3(luminance), dayColor, 0.15); // mostly desaturated
-  vec3 darkened = desaturated * 0.25; // significantly darkened
-
-  // Sun-based lighting for day/night terminator
+  // Sun-based lighting
   vec3 worldNormal = normalize(vNormal);
   float sunDot = dot(worldNormal, sunDirection);
-
-  // Smooth terminator transition
   float dayFactor = smoothstep(-0.15, 0.25, sunDot);
 
-  // Base diffuse lighting (subtle, not full bright)
-  float diffuse = max(0.0, sunDot) * 0.3 + 0.7; // ambient 0.7, diffuse adds 0.3
+  // --- VISITED: vivid full-color satellite imagery ---
+  float vDiffuse = max(0.0, sunDot) * 0.5 + 0.5;
+  float luminance = dot(dayColor, vec3(0.299, 0.587, 0.114));
 
-  // Combine: darkened day on the lit side, night lights on the dark side
-  // Night lights are very faint — just a whisper
-  vec3 nightGlow = nightColor * 0.4 * (1.0 - dayFactor);
-  vec3 baseColor = darkened * diffuse + nightGlow;
+  // Tint white/snowy areas toward amber so Alaska looks consistent
+  float saturation = length(dayColor - vec3(luminance));
+  float whiteness = smoothstep(0.4, 0.8, luminance) * (1.0 - smoothstep(0.0, 0.15, saturation));
+  vec3 amber = vec3(1.0, 0.7, 0.3);
+  vec3 tintedDay = mix(dayColor, amber * luminance, whiteness * 0.7);
+
+  vec3 visitedDay = tintedDay * vDiffuse * dayFactor;
+  vec3 visitedNight = nightColor * 0.35 * (1.0 - dayFactor);
+  vec3 visitedColor = visitedDay + visitedNight;
+
+  // --- UNVISITED: dark fog, terrain hints visible ---
+  float foggedLum = luminance * 0.12;
+  vec3 unvisitedColor = vec3(foggedLum) * dayFactor;
+  vec3 nightWhisper = nightColor * 0.15 * (1.0 - dayFactor);
+  unvisitedColor += nightWhisper;
+
+  vec3 baseColor = mix(unvisitedColor, visitedColor, visited);
 
   gl_FragColor = vec4(baseColor, 1.0);
 }
