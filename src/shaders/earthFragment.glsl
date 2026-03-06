@@ -18,24 +18,25 @@ void main() {
   float sunDot = dot(worldNormal, sunDirection);
   float dayFactor = smoothstep(-0.15, 0.25, sunDot);
 
-  // --- VISITED: vivid full-color satellite imagery ---
-  float vDiffuse = max(0.0, sunDot) * 0.5 + 0.5;
   float luminance = dot(dayColor, vec3(0.299, 0.587, 0.114));
-
-  // Tint white/snowy areas toward amber so Alaska looks consistent
   float saturation = length(dayColor - vec3(luminance));
-  float whiteness = smoothstep(0.4, 0.8, luminance) * (1.0 - smoothstep(0.0, 0.15, saturation));
-  vec3 amber = vec3(1.0, 0.7, 0.3);
-  vec3 tintedDay = mix(dayColor, amber * luminance, whiteness * 0.7);
 
-  vec3 visitedDay = tintedDay * vDiffuse * dayFactor;
+  // Darken snow/ice without imposing color — preserve natural texture
+  float whiteness = smoothstep(0.55, 0.85, luminance) * (1.0 - smoothstep(0.0, 0.10, saturation));
+  vec3 correctedDay = dayColor * mix(1.0, 0.30, whiteness);
+  float correctedLum = dot(correctedDay, vec3(0.299, 0.587, 0.114));
+
+  // --- VISITED: vivid satellite imagery ---
+  float vDiffuse = max(0.0, sunDot) * 0.4 + 0.65;
+  vec3 visitedDay = correctedDay * vDiffuse * 1.7 * dayFactor;
   vec3 visitedNight = nightColor * 0.35 * (1.0 - dayFactor);
   vec3 visitedColor = visitedDay + visitedNight;
 
-  // --- UNVISITED: dark fog, terrain hints visible ---
-  float foggedLum = luminance * 0.12;
-  vec3 unvisitedColor = vec3(foggedLum) * dayFactor;
-  vec3 nightWhisper = nightColor * 0.15 * (1.0 - dayFactor);
+  // --- UNVISITED: cinematic darkened terrain with subtle fog ---
+  vec3 terrainDark = mix(vec3(correctedLum), correctedDay, 0.45) * 0.12 * dayFactor;
+  vec3 fogFloor = vec3(0.014, 0.013, 0.012);
+  vec3 unvisitedColor = terrainDark + fogFloor * dayFactor;
+  vec3 nightWhisper = nightColor * 0.10 * (1.0 - dayFactor);
   unvisitedColor += nightWhisper;
 
   vec3 baseColor = mix(unvisitedColor, visitedColor, visited);
