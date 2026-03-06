@@ -314,49 +314,45 @@ Set appropriate CSP headers to prevent XSS and restrict resource loading to know
 
 The build is sequenced so that each phase produces something visually impressive and testable on its own. No phase should end with an ugly or broken intermediate state.
 
-### Phase 1: The Globe (Week 1)
+### Phase 1: The Globe ✅
 
 **Goal:** A beautiful dark globe floating in space that you can spin and zoom.
 
-1. Scaffold React + TypeScript project, deploy to Vercel
-2. Build custom Three.js scene: renderer, camera, OrbitControls with damping
-3. Apply NASA Blue Marble texture to a sphere, darkened/desaturated via shader
-4. Add atmospheric rendering: Fresnel edge glow with depth, atmospheric scattering
-5. Add star field background
-6. Set up post-processing pipeline (EffectComposer): bloom, tone mapping
-7. Style the page: full-viewport globe, dark background, zero UI chrome
-8. Verify performance on desktop and mobile (touch controls)
+1. ✅ Scaffold React + TypeScript project, deploy to Vercel
+2. ✅ Build custom Three.js scene: renderer, camera, OrbitControls with damping
+3. ✅ Apply NASA Blue Marble texture to a sphere, darkened/desaturated via shader
+4. ✅ Add atmospheric rendering: Fresnel edge glow with depth, atmospheric scattering (outer + inner atmosphere)
+5. ✅ Add star field background (8000 stars with color temperature variation)
+6. ✅ Set up post-processing pipeline (EffectComposer): bloom, ACES filmic tone mapping
+7. ✅ Style the page: full-viewport globe, dark background, zero UI chrome
+8. ✅ Verify performance on desktop (touch/mobile TBD)
 
-**Exit criteria:** Someone looking at this says "that's beautiful" even though it doesn't do anything yet.
+### Phase 2: Fog of War + Sound ✅
 
-### Phase 2A: Basic Fog of War (Week 2)
+**Goal:** Visited countries glow with vivid color; everything else is dark and fogged with living, animated atmosphere. Sound foundations laid.
 
-**Goal:** Visited countries glow with vivid color; everything else is dark and fogged. Sound foundations laid.
+1. ✅ Load Natural Earth country polygons (1:50m TopoJSON via `countries-50m.json`)
+2. ✅ Rasterize polygon data into a 2048×1024 visited-mask texture
+3. ✅ Implement fog of war: custom fragment shader with hard polygon cutouts
+4. ✅ Hardcode visited countries (US) for visual development
+5. ✅ Tune visited/unvisited contrast: visited areas boosted (1.7× brightness, raised diffuse floor), unvisited darkened to ~12% luminance with natural color preservation (45% hue retention)
+6. ✅ Snow/ice suppression: detect bright desaturated regions and darken without imposing artificial color
+7. ✅ Add NASA Black Marble (nighttime) texture blended faintly on unvisited areas
+8. ✅ Add city ember glow: warm amber point-lights with multi-layered core/inner/outer glow and subtle pulse animation
+9. ✅ Real-time day/night terminator driven by sun position
+10. ✅ Procedural 3D simplex noise (FBM, 4 octaves) for fog density variation — subtle brightness differences across unvisited areas
+11. ✅ Animated fog drift over time (subliminal noise offset)
+12. ✅ Subtle warm atmospheric fog floor in unvisited regions
+13. ✅ Set up Web Audio API infrastructure: AudioManager with gain nodes, lazy asset loading
+14. ✅ Implement space ambient hum (globe scale) and zoom-linked crossfade to atmospheric wind
+15. ⬜ Implement zoom-dependent rendering (polygons at globe scale, more detail when zoomed)
 
-1. Load Natural Earth country polygons (1:50m GeoJSON)
-2. Rasterize polygon data into a visited-mask texture
-3. Implement basic fog of war: dark overlay sphere with hard polygon cutouts
-4. Hardcode 5-10 countries as "visited" for visual development
-5. Tune the contrast between visited (vivid satellite) and unvisited (dark, desaturated)
-6. Add NASA Black Marble (nighttime) texture blended very faintly on unvisited areas — extremely subtle, just a whisper of city lights
-7. Add city ember glow: warm amber point-lights on visited cities, visible from globe scale
-8. Implement zoom-dependent rendering (polygons at globe scale, more detail when zoomed)
-9. Set up Web Audio API infrastructure: audio context, gain nodes, lazy asset loading
-10. Implement space ambient hum (globe scale) and zoom-linked crossfade to atmospheric wind
+**Design decisions:**
+- Feathered/soft edges at visited boundaries were tried and removed — hard cutoffs look cleaner with the current visual style
+- Fog uses 3D view-space position for noise to avoid UV seam artifacts at the date line
+- Fog color is warm-neutral (not blue) to complement the existing blue atmospheric Fresnel glow
 
-**Exit criteria:** The contrast between explored and unexplored is dramatic and beautiful. The nighttime city lights add mystery without competing. Visited cities glow like embers. With sound enabled, the globe feels alive.
-
-### Phase 2B: Beautiful Fog (Week 3)
-
-**Goal:** The fog feels alive, not like a flat mask.
-
-1. Add procedural simplex noise to the fog shader for organic variation
-2. Implement soft, feathered edges at visited/unvisited boundaries (distance field blur)
-3. Add subtle fog animation: slow noise drift over time
-4. Implement real-time day/night terminator (sun position shader uniform)
-5. Fine-tune all visual layers together: fog opacity, noise scale, edge softness, terminator contrast, nighttime texture blend
-
-**Exit criteria:** The fog has depth and life. Boundaries feel organic, not geometric. The day/night terminator adds realism. All visual layers work in harmony.
+**Exit criteria:** The contrast between explored and unexplored is dramatic and beautiful. The fog has subtle depth variation and living animation. Visited cities glow like embers. With sound enabled, the globe feels alive.
 
 ### Phase 3: Manual Entry + Reveal Logic (Week 4)
 

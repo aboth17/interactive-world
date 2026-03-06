@@ -1,7 +1,6 @@
 import * as topojson from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
-import { VISITED_COUNTRY_IDS } from '../data/visitedCountries';
 
 export interface CountryFeature {
   type: 'Feature';
@@ -10,10 +9,37 @@ export interface CountryFeature {
   properties: { name: string };
 }
 
-let cachedFeatures: CountryFeature[] | null = null;
+export interface CountryInfo {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
 
-export async function loadVisitedCountryFeatures(): Promise<CountryFeature[]> {
-  if (cachedFeatures) return cachedFeatures;
+let allFeaturesCache: CountryFeature[] | null = null;
+let countryInfoCache: CountryInfo[] | null = null;
+
+function computeCentroid(feature: CountryFeature): { lat: number; lng: number } {
+  let sumLat = 0, sumLng = 0, count = 0;
+  const polygons = feature.geometry.type === 'Polygon'
+    ? [feature.geometry.coordinates]
+    : feature.geometry.coordinates;
+
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      for (const coord of ring) {
+        sumLng += coord[0];
+        sumLat += coord[1];
+        count++;
+      }
+    }
+  }
+
+  return { lat: sumLat / count, lng: sumLng / count };
+}
+
+async function loadAllFeatures(): Promise<CountryFeature[]> {
+  if (allFeaturesCache) return allFeaturesCache;
 
   const response = await fetch('/data/countries-50m.json');
   const topology = (await response.json()) as Topology;
@@ -21,9 +47,28 @@ export async function loadVisitedCountryFeatures(): Promise<CountryFeature[]> {
   const countriesObject = topology.objects.countries as GeometryCollection;
   const allCountries = topojson.feature(topology, countriesObject) as FeatureCollection;
 
-  cachedFeatures = allCountries.features.filter(
-    (f) => f.id && VISITED_COUNTRY_IDS.has(String(f.id))
-  ) as CountryFeature[];
+  allFeaturesCache = allCountries.features.filter(f => f.id) as CountryFeature[];
+  return allFeaturesCache;
+}
 
-  return cachedFeatures;
+export async function loadCountryInfo(): Promise<CountryInfo[]> {
+  if (countryInfoCache) return countryInfoCache;
+
+  const features = await loadAllFeatures();
+  countryInfoCache = features.map(f => {
+    const centroid = computeCentroid(f);
+    return {
+      id: String(f.id),
+      name: f.properties.name,
+      lat: centroid.lat,
+      lng: centroid.lng,
+    };
+  });
+
+  return countryInfoCache;
+}
+
+export async function loadVisitedCountryFeatures(visitedIds: Set<string>): Promise<CountryFeature[]> {
+  const all = await loadAllFeatures();
+  return all.filter(f => visitedIds.has(String(f.id)));
 }

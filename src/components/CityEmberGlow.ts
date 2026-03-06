@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { VISITED_CITIES } from '../data/visitedCities';
+import type { City } from '../data/visitedCities';
 import { latLngToVector3 } from '../utils/coordinates';
 
-export function createCityEmberPoints(globeRadius: number): THREE.Points {
-  const count = VISITED_CITIES.length;
-  const positions = new Float32Array(count * 3);
+export function createCityEmberPoints(globeRadius: number, cities: City[] = []): THREE.Points {
+  const count = cities.length;
+  const positions = new Float32Array(Math.max(count, 1) * 3);
 
   for (let i = 0; i < count; i++) {
-    const city = VISITED_CITIES[i];
+    const city = cities[i];
     const pos = latLngToVector3(city.lat, city.lng, globeRadius + 0.02);
     positions[i * 3] = pos.x;
     positions[i * 3 + 1] = pos.y;
