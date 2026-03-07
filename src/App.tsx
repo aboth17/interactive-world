@@ -2,6 +2,7 @@ import Globe from './components/Globe';
 import AudioToggle from './components/AudioToggle';
 import SearchInput from './components/SearchInput';
 import ExplorationStats from './components/ExplorationStats';
+import PhotoImport from './components/PhotoImport';
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
       <ExplorationStats />
       <SearchInput />
       <AudioToggle />
+      <PhotoImport />
     </>
   );
 }

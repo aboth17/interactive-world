@@ -111,10 +111,11 @@ void main() {
   float fogDepth = 1.0 + noise * 0.06;
 
   // --- VISITED: vivid satellite imagery ---
-  float vDiffuse = max(0.0, sunDot) * 0.4 + 0.65;
-  vec3 visitedDay = correctedDay * vDiffuse * 1.7 * dayFactor;
-  vec3 visitedNight = nightColor * 0.35 * (1.0 - dayFactor);
-  vec3 visitedColor = visitedDay + visitedNight;
+  float vDiffuse = max(0.0, sunDot) * 0.4 + 0.85;
+  vec3 visitedDay = correctedDay * vDiffuse * 2.2 * dayFactor;
+  vec3 visitedAmbient = correctedDay * 0.55 * (1.0 - dayFactor); // keep visited visible on night side
+  vec3 visitedNight = nightColor * 0.5 * (1.0 - dayFactor);
+  vec3 visitedColor = visitedDay + visitedAmbient + visitedNight;
 
   // --- UNVISITED: cinematic living fog ---
   vec3 terrainDark = mix(vec3(correctedLum), correctedDay, 0.45) * 0.12 * dayFactor;

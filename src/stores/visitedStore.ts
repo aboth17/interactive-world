@@ -33,11 +33,25 @@ class VisitedStore {
     this.notify();
   }
 
+  removeCountry(code: string) {
+    if (!this.countryCodes.has(code)) return;
+    this.countryCodes.delete(code);
+    this.cities = this.cities.filter(c => c.countryId !== code);
+    this.save();
+    this.notify();
+  }
+
   addCity(city: City) {
     this.countryCodes.add(city.countryId);
     if (!this.cities.some(c => c.name === city.name && c.countryId === city.countryId)) {
       this.cities.push(city);
     }
+    this.save();
+    this.notify();
+  }
+
+  removeCity(name: string, countryId: string) {
+    this.cities = this.cities.filter(c => !(c.name === name && c.countryId === countryId));
     this.save();
     this.notify();
   }

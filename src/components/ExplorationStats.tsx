@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { visitedStore } from '../stores/visitedStore';
+import PlacesPanel from './PlacesPanel';
 
 function useAnimatedValue(target: number, duration = 600): number {
   const [display, setDisplay] = useState(target);
@@ -33,6 +34,7 @@ export default function ExplorationStats() {
   const [countryCount, setCountryCount] = useState(() => visitedStore.getCountryCodes().size);
   const [cityCount, setCityCount] = useState(() => visitedStore.getCities().length);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     return visitedStore.subscribe(() => {
@@ -64,25 +66,35 @@ export default function ExplorationStats() {
   if (countryCount === 0 && cityCount === 0) return null;
 
   return (
-    <div style={{
-      ...styles.container,
-      opacity: searchFocused ? 0.35 : 0.85,
-    }}>
-      <div style={styles.stat}>
-        <span style={styles.number}>{Math.round(animatedCountries)}</span>
-        <span style={styles.label}>countries</span>
-      </div>
-      <div style={styles.divider} />
-      <div style={styles.stat}>
-        <span style={styles.number}>{Math.round(animatedCities)}</span>
-        <span style={styles.label}>cities</span>
-      </div>
-      <div style={styles.divider} />
-      <div style={styles.stat}>
-        <span style={styles.number}>{animatedPct.toFixed(1)}%</span>
-        <span style={styles.label}>of world visited</span>
-      </div>
-    </div>
+    <>
+      {panelOpen && <PlacesPanel onClose={() => setPanelOpen(false)} />}
+
+      {!panelOpen && (
+        <div
+          style={{
+            ...styles.container,
+            opacity: searchFocused ? 0.35 : 0.85,
+          }}
+          onClick={() => setPanelOpen(true)}
+          title="View & edit my places"
+        >
+          <div style={styles.stat}>
+            <span style={styles.number}>{Math.round(animatedCountries)}</span>
+            <span style={styles.label}>countries</span>
+          </div>
+          <div style={styles.divider} />
+          <div style={styles.stat}>
+            <span style={styles.number}>{Math.round(animatedCities)}</span>
+            <span style={styles.label}>cities</span>
+          </div>
+          <div style={styles.divider} />
+          <div style={styles.stat}>
+            <span style={styles.number}>{animatedPct.toFixed(1)}%</span>
+            <span style={styles.label}>of world visited</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -102,8 +114,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     border: '1px solid rgba(255, 255, 255, 0.06)',
     transition: 'opacity 0.4s ease',
-    pointerEvents: 'none',
     userSelect: 'none',
+    cursor: 'pointer',
   },
   stat: {
     display: 'flex',
