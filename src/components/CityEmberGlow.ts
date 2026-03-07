@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { VISITED_CITIES } from '../data/visitedCities';
+import type { City } from '../data/visitedCities';
 import { latLngToVector3 } from '../utils/coordinates';
 
-export function createCityEmberPoints(globeRadius: number): THREE.Points {
-  const count = VISITED_CITIES.length;
-  const positions = new Float32Array(count * 3);
+export function createCityEmberPoints(globeRadius: number, cities: City[] = []): THREE.Points {
+  const count = cities.length;
+  const positions = new Float32Array(Math.max(count, 1) * 3);
 
   for (let i = 0; i < count; i++) {
-    const city = VISITED_CITIES[i];
+    const city = cities[i];
     const pos = latLngToVector3(city.lat, city.lng, globeRadius + 0.02);
     positions[i * 3] = pos.x;
     positions[i * 3 + 1] = pos.y;
@@ -28,8 +28,8 @@ export function createCityEmberPoints(globeRadius: number): THREE.Points {
       uniform float cameraDistance;
       void main() {
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        float size = pixelRatio * (200.0 / cameraDistance);
-        size = clamp(size, 4.0, 30.0);
+        float size = pixelRatio * (400.0 / cameraDistance);
+        size = clamp(size, 6.0, 50.0);
         gl_PointSize = size;
         gl_Position = projectionMatrix * mvPosition;
       }
@@ -53,8 +53,8 @@ export function createCityEmberPoints(globeRadius: number): THREE.Points {
         vec3 innerColor = vec3(1.0, 0.7, 0.3);
         vec3 outerColor = vec3(0.9, 0.4, 0.1);
 
-        vec3 color = coreColor * core + innerColor * inner * 0.6 + outerColor * outer * 0.3;
-        float alpha = (core + inner * 0.5 + outer * 0.2) * pulse;
+        vec3 color = coreColor * core + innerColor * inner * 0.8 + outerColor * outer * 0.5;
+        float alpha = (core + inner * 0.7 + outer * 0.35) * pulse;
 
         gl_FragColor = vec4(color * alpha, alpha);
       }

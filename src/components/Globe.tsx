@@ -14,12 +14,14 @@ import { loadVisitedCountryFeatures } from '../utils/geoData';
 import { generateVisitedMask } from '../utils/visitedMaskTexture';
 import { createCityEmberPoints } from './CityEmberGlow';
 import { AudioManager } from '../audio/AudioManager';
+import { visitedStore } from '../stores/visitedStore';
 
 const GLOBE_RADIUS = 5;
 const ATMOSPHERE_RADIUS = 5.15;
 const STAR_COUNT = 8000;
 const MIN_DISTANCE = 7;
 const MAX_DISTANCE = 40;
+const FLY_DURATION = 1.5;
 
 function getSunDirection(): THREE.Vector3 {
   const now = new Date();
@@ -38,6 +40,18 @@ function getSunDirection(): THREE.Vector3 {
     Math.sin(decRad),
     Math.cos(decRad) * Math.sin(solarLongitude)
   ).normalize();
+}
+
+function latLngToCameraPos(lat: number, lng: number, distance: number, earthRotationY: number): THREE.Vector3 {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lng + 180) * (Math.PI / 180);
+  const dir = new THREE.Vector3(
+    -Math.sin(phi) * Math.cos(theta),
+    Math.cos(phi),
+    Math.sin(phi) * Math.sin(theta)
+  );
+  dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), earthRotationY);
+  return dir.multiplyScalar(distance);
 }
 
 function createStarField(): THREE.Points {
@@ -190,6 +204,7 @@ export default function Globe() {
         bumpTexture: { value: bumpTexture },
         visitedMask: { value: placeholderMask },
         sunDirection: { value: sunDirection },
+        time: { value: 0.0 },
       },
       vertexShader: earthVertexShader,
       fragmentShader: earthFragmentShader,
@@ -198,16 +213,53 @@ export default function Globe() {
     const earth = new THREE.Mesh(earthGeometry, earthMaterial);
     scene.add(earth);
 
-    // Load visited mask asynchronously
-    loadVisitedCountryFeatures().then((features) => {
-      const maskTexture = generateVisitedMask(features);
-      earthMaterial.uniforms.visitedMask.value = maskTexture;
-      placeholderMask.dispose();
+    // --- Dynamic visited mask + embers ---
+    let currentEmbers: THREE.Points = createCityEmberPoints(GLOBE_RADIUS, visitedStore.getCities());
+    earth.add(currentEmbers);
+
+    async function updateMask() {
+      const features = await loadVisitedCountryFeatures(visitedStore.getCountryCodes());
+      const newMask = generateVisitedMask(features);
+      const oldMask = earthMaterial.uniforms.visitedMask.value;
+      earthMaterial.uniforms.visitedMask.value = newMask;
+      if (oldMask) oldMask.dispose();
+    }
+
+    function updateEmbers() {
+      earth.remove(currentEmbers);
+      currentEmbers.geometry.dispose();
+      (currentEmbers.material as THREE.Material).dispose();
+      currentEmbers = createCityEmberPoints(GLOBE_RADIUS, visitedStore.getCities());
+      earth.add(currentEmbers);
+    }
+
+    // Initial load
+    updateMask();
+
+    // Subscribe to store changes
+    const unsubscribeStore = visitedStore.subscribe(() => {
+      updateMask();
+      updateEmbers();
     });
 
-    // City ember glow
-    const cityEmbers = createCityEmberPoints(GLOBE_RADIUS);
-    earth.add(cityEmbers); // Add as child so it rotates with the globe
+    // --- Fly-to animation ---
+    let flyTarget: THREE.Vector3 | null = null;
+    let flyStart: THREE.Vector3 | null = null;
+    let flyStartTime = 0;
+    let isFlying = false;
+
+    function onFlyTo(e: Event) {
+      const { lat, lng } = (e as CustomEvent).detail;
+      const dist = camera.position.length();
+      flyTarget = latLngToCameraPos(lat, lng, dist, earth.rotation.y);
+      flyStart = camera.position.clone();
+      flyStartTime = clock.getElapsedTime();
+      isFlying = true;
+      userInteracting = true;
+      clearTimeout(interactionTimeout);
+    }
+
+    window.addEventListener('globe:flyto', onFlyTo);
 
     // Atmosphere
     const atmosphereGeometry = new THREE.SphereGeometry(ATMOSPHERE_RADIUS, 128, 64);
@@ -305,10 +357,38 @@ export default function Globe() {
 
       const elapsed = clock.getElapsedTime();
 
-      // Slow auto-rotation
-      if (!userInteracting) {
-        earth.rotation.y += 0.0005;
-        innerAtmosphere.rotation.y = earth.rotation.y;
+      // Fly-to animation
+      if (isFlying && flyTarget && flyStart) {
+        const t = Math.min((elapsed - flyStartTime) / FLY_DURATION, 1);
+        // Ease in-out cubic
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        // Slerp for natural globe rotation arc
+        const startDir = flyStart.clone().normalize();
+        const endDir = flyTarget.clone().normalize();
+        const dist = flyStart.length();
+
+        const q1 = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startDir);
+        const q2 = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), endDir);
+        const qInterp = q1.clone().slerp(q2, ease);
+
+        const newDir = new THREE.Vector3(0, 0, 1).applyQuaternion(qInterp);
+        camera.position.copy(newDir.multiplyScalar(dist));
+        camera.lookAt(0, 0, 0);
+
+        if (t >= 1) {
+          isFlying = false;
+          interactionTimeout = setTimeout(() => {
+            userInteracting = false;
+          }, 2000);
+        }
+      } else {
+        // Slow auto-rotation
+        if (!userInteracting) {
+          earth.rotation.y += 0.0005;
+          innerAtmosphere.rotation.y = earth.rotation.y;
+        }
+        controls.update();
       }
 
       // Update sun direction every ~60 seconds
@@ -321,15 +401,17 @@ export default function Globe() {
 
       // Update city ember uniforms
       const camDist = camera.position.length();
-      const emberMat = cityEmbers.material as THREE.ShaderMaterial;
+      const emberMat = currentEmbers.material as THREE.ShaderMaterial;
       emberMat.uniforms.cameraDistance.value = camDist;
       emberMat.uniforms.time.value = elapsed;
+
+      // Update fog animation
+      earthMaterial.uniforms.time.value = elapsed;
 
       // Update audio zoom crossfade
       const zoomFactor = 1.0 - (camDist - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
       audioManager.updateZoom(Math.max(0, Math.min(1, zoomFactor)));
 
-      controls.update();
       composer.render();
     }
 
@@ -352,6 +434,8 @@ export default function Globe() {
     // Cleanup
     return () => {
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('globe:flyto', onFlyTo);
+      unsubscribeStore();
       clearTimeout(interactionTimeout);
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animationId);
