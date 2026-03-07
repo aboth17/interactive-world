@@ -10,24 +10,35 @@ interface StreetViewProps {
   onClose: () => void;
 }
 
-type Phase = 'fade-in' | 'loading' | 'active' | 'no-coverage' | 'fade-out' | 'over-limit';
+type Phase = 'fade-to-black' | 'loading' | 'revealing' | 'active' | 'no-coverage' | 'fade-out' | 'over-limit';
 
 export default function StreetView({ lat, lng, cityName, onClose }: StreetViewProps) {
   const panoRef = useRef<HTMLDivElement>(null);
   const panoramaRef = useRef<google.maps.StreetViewPanorama | null>(null);
-  const [phase, setPhase] = useState<Phase>('fade-in');
+  const [phase, setPhase] = useState<Phase>('fade-to-black');
 
+  // Phase 1: Slow fade to black, then start loading
   useEffect(() => {
-    const fadeTimer = setTimeout(() => {
-      if (!canUseApi(2)) { // landmark lookup + panorama load
+    // Small delay so the opacity transition actually plays (mounted at opacity 0)
+    const kickoff = requestAnimationFrame(() => {
+      // Triggers the CSS transition to opacity 1 (black screen)
+    });
+
+    const loadTimer = setTimeout(() => {
+      if (!canUseApi(2)) {
         setPhase('over-limit');
         return;
       }
       setPhase('loading');
-    }, 350);
-    return () => clearTimeout(fadeTimer);
+    }, 900); // Wait for fade-to-black to complete before loading
+
+    return () => {
+      cancelAnimationFrame(kickoff);
+      clearTimeout(loadTimer);
+    };
   }, []);
 
+  // Phase 2: Load landmark + panorama behind the black screen
   useEffect(() => {
     if (phase !== 'loading') return;
 
@@ -42,7 +53,6 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
       }
       if (cancelled) return;
 
-      // Try to find a famous landmark in this city
       let targetLat = lat;
       let targetLng = lng;
       const landmark = await findLandmark(cityName, lat, lng);
@@ -70,9 +80,8 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
           return;
         }
 
-        recordApiCalls(1); // panorama load
+        recordApiCalls(1);
 
-        // Compute heading from panorama position toward landmark
         let heading = 0;
         if (landmark) {
           heading = google.maps.geometry?.spherical?.computeHeading(
@@ -91,7 +100,23 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
         });
 
         panoramaRef.current = panorama;
-        setPhase('active');
+
+        // Wait for panorama tiles to actually render before revealing
+        google.maps.event.addListenerOnce(panorama, 'pano_changed', () => {
+          if (!cancelled) {
+            // Give tiles a moment to paint
+            setTimeout(() => {
+              if (!cancelled) setPhase('revealing');
+            }, 300);
+          }
+        });
+
+        // Fallback: if pano_changed doesn't fire within 3s, reveal anyway
+        setTimeout(() => {
+          if (!cancelled && phase === 'loading') {
+            setPhase('revealing');
+          }
+        }, 3000);
       } catch {
         if (!cancelled) setPhase('no-coverage');
       }
@@ -101,9 +126,16 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
     return () => { cancelled = true; };
   }, [phase, lat, lng, cityName]);
 
+  // Phase 3: Fade the black screen away, then go active
+  useEffect(() => {
+    if (phase !== 'revealing') return;
+    const timer = setTimeout(() => setPhase('active'), 800);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
   function handleClose() {
     setPhase('fade-out');
-    setTimeout(onClose, 350);
+    setTimeout(onClose, 800);
   }
 
   useEffect(() => {
@@ -114,33 +146,41 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const showBlack = phase === 'fade-in' || phase === 'fade-out';
-  const showPano = phase === 'loading' || phase === 'active';
+  // Black screen is opaque during fade-to-black, loading, and fade-out
+  const blackOpaque = phase === 'loading' || phase === 'fade-out';
+  const blackVisible = phase === 'fade-to-black' || blackOpaque;
+  // Panorama mounts during loading (hidden behind black) and stays for active
+  const panoMounted = phase === 'loading' || phase === 'revealing' || phase === 'active';
   const showMessage = phase === 'no-coverage' || phase === 'over-limit';
 
   return (
     <div style={{
       ...styles.overlay,
-      opacity: phase === 'fade-in' ? 0 : 1,
+      opacity: phase === 'fade-to-black' ? 0 : 1,
     }}>
+      {/* Vignette — always on top, pointer-transparent */}
       <div style={styles.vignette} />
 
+      {/* Black screen — fades in, stays during load, fades out to reveal pano */}
       <div style={{
         ...styles.blackScreen,
-        opacity: showBlack ? 1 : 0,
-        pointerEvents: showBlack ? 'auto' : 'none',
+        opacity: blackVisible ? 1 : 0,
+        pointerEvents: blackOpaque ? 'auto' : 'none',
       }} />
 
-      {showPano && (
+      {/* Panorama — mounted behind black screen during loading */}
+      {panoMounted && (
         <div ref={panoRef} style={styles.panoContainer} />
       )}
 
-      {phase === 'loading' && (
+      {/* Loading dot — shows on black during API work */}
+      {(phase === 'loading' || phase === 'fade-to-black') && (
         <div style={styles.centerMessage}>
           <div style={styles.loadingDot} />
         </div>
       )}
 
+      {/* Error messages */}
       {showMessage && (
         <div style={styles.centerMessage}>
           <p style={styles.messageText}>
@@ -154,7 +194,8 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
         </div>
       )}
 
-      {phase === 'active' && (
+      {/* Close button — only when panorama is visible */}
+      {(phase === 'revealing' || phase === 'active') && (
         <button onClick={handleClose} style={styles.closeButton} title="Return to globe (Esc)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -170,19 +211,20 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'fixed',
     inset: 0,
     zIndex: 100,
-    transition: 'opacity 0.35s ease',
+    background: '#000',
+    transition: 'opacity 0.8s ease',
   },
   blackScreen: {
     position: 'absolute',
     inset: 0,
     background: '#000',
-    transition: 'opacity 0.35s ease',
+    transition: 'opacity 0.8s ease',
     zIndex: 101,
   },
   panoContainer: {
     position: 'absolute',
     inset: 0,
-    zIndex: 102,
+    zIndex: 100,
   },
   vignette: {
     position: 'absolute',
