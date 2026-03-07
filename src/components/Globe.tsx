@@ -24,25 +24,6 @@ const MIN_DISTANCE = 7;
 const MAX_DISTANCE = 40;
 const FLY_DURATION = 1.5;
 
-function getSunDirection(): THREE.Vector3 {
-  const now = new Date();
-  const dayOfYear =
-    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
-      Date.UTC(now.getFullYear(), 0, 0)) /
-    86400000;
-  const hourUTC = now.getUTCHours() + now.getUTCMinutes() / 60;
-
-  const solarLongitude = ((12 - hourUTC) / 24) * Math.PI * 2;
-  const declination = -23.44 * Math.cos((2 * Math.PI * (dayOfYear + 10)) / 365);
-  const decRad = (declination * Math.PI) / 180;
-
-  return new THREE.Vector3(
-    Math.cos(decRad) * Math.cos(solarLongitude),
-    Math.sin(decRad),
-    Math.cos(decRad) * Math.sin(solarLongitude)
-  ).normalize();
-}
-
 function latLngToCameraPos(lat: number, lng: number, distance: number, earthRotationY: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lng + 180) * (Math.PI / 180);
@@ -180,18 +161,13 @@ export default function Globe({ onCityClick }: GlobeProps) {
     // Texture loader
     const textureLoader = new THREE.TextureLoader();
 
-    // Sun direction (real-time)
-    const sunDirection = getSunDirection();
-
     // Earth — start with a placeholder 1x1 black mask, replaced once geo data loads
     const earthGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 128, 64);
 
     const dayTexture = textureLoader.load('/textures/earth_daymap.jpg');
-    const nightTexture = textureLoader.load('/textures/earth_nightmap.jpg');
     const bumpTexture = textureLoader.load('/textures/earth_topology.png');
 
     dayTexture.colorSpace = THREE.SRGBColorSpace;
-    nightTexture.colorSpace = THREE.SRGBColorSpace;
 
     // Placeholder 1x1 black texture until mask loads
     const placeholderCanvas = document.createElement('canvas');
@@ -205,10 +181,8 @@ export default function Globe({ onCityClick }: GlobeProps) {
     const earthMaterial = new THREE.ShaderMaterial({
       uniforms: {
         dayTexture: { value: dayTexture },
-        nightTexture: { value: nightTexture },
         bumpTexture: { value: bumpTexture },
         visitedMask: { value: placeholderMask },
-        sunDirection: { value: sunDirection },
         time: { value: 0.0 },
       },
       vertexShader: earthVertexShader,
@@ -325,9 +299,7 @@ export default function Globe({ onCityClick }: GlobeProps) {
     // Atmosphere
     const atmosphereGeometry = new THREE.SphereGeometry(ATMOSPHERE_RADIUS, 128, 64);
     const atmosphereMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        sunDirection: { value: sunDirection },
-      },
+      uniforms: {},
       vertexShader: atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
       transparent: true,
@@ -340,12 +312,9 @@ export default function Globe({ onCityClick }: GlobeProps) {
 
     // Inner atmosphere
     const innerAtmosMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        sunDirection: { value: sunDirection },
-      },
+      uniforms: {},
       vertexShader: atmosphereVertexShader,
       fragmentShader: `
-        uniform vec3 sunDirection;
         varying vec3 vNormal;
         varying vec3 vPosition;
         void main() {
@@ -353,9 +322,8 @@ export default function Globe({ onCityClick }: GlobeProps) {
           vec3 normal = normalize(vNormal);
           float fresnel = 1.0 - dot(viewDir, normal);
           fresnel = pow(fresnel, 5.0);
-          float sunInfluence = dot(normal, sunDirection) * 0.5 + 0.5;
           vec3 color = vec3(0.3, 0.5, 1.0);
-          float intensity = fresnel * sunInfluence * 0.4;
+          float intensity = fresnel * 0.3;
           gl_FragColor = vec4(color, intensity);
         }
       `,
@@ -450,14 +418,6 @@ export default function Globe({ onCityClick }: GlobeProps) {
           innerAtmosphere.rotation.y = earth.rotation.y;
         }
         controls.update();
-      }
-
-      // Update sun direction every ~60 seconds
-      if (Math.floor(elapsed) % 60 === 0 && elapsed > 1) {
-        const newSunDir = getSunDirection();
-        earthMaterial.uniforms.sunDirection.value.copy(newSunDir);
-        atmosphereMaterial.uniforms.sunDirection.value.copy(newSunDir);
-        innerAtmosMaterial.uniforms.sunDirection.value.copy(newSunDir);
       }
 
       // Update city ember uniforms
