@@ -358,15 +358,12 @@ The build is sequenced so that each phase produces something visually impressive
 
 **Goal:** Type a city name, watch the globe come alive.
 
-1. Bundle GeoNames city database (~23k cities, ~2MB JSON)
-2. Build the search input with instant local autocomplete
-3. Add Nominatim fallback for disambiguation
-4. Implement the tiered reveal logic (country for small nations, state/region for large nations)
-5. Load Natural Earth admin-1 boundaries for large countries
-6. Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon
-7. Add arrival chime sound (warm, resonant tone synced to the visual reveal)
-8. Add city pin layer with ember glow
-9. Connect to Supabase for persistence (user accounts, saved visits)
+1. ✅ Bundle GeoNames city database (~23k cities, ~2MB JSON)
+2. ✅ Build the search input with instant local autocomplete
+3. ✅ Add city pin layer with ember glow
+4. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon
+5. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
+6. ✅ Exploration stats overlay (countries visited count + percentage of 195 UN countries)
 
 **Exit criteria:** Adding a new place feels like a rewarding moment of discovery. The arrival animation is smooth and emotionally satisfying. The sound and visual reward are perfectly synced.
 
@@ -406,10 +403,13 @@ The build is sequenced so that each phase produces something visually impressive
 1. Performance audit: optimize polygon rendering, texture loading, shader complexity
 2. Mobile optimization: touch controls, responsive layout, reduced polygon detail on mobile
 3. Loading experience: elegant loading state while globe assets initialize
-4. Exploration stats display (F7)
-5. Sound polish: fine-tune crossfades, volumes, timing of arrival chime
-6. Final visual polish pass: lighting, colors, animation curves, typography
-7. Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
+4. ⬜ Add Nominatim fallback for disambiguation
+5. ⬜ Implement the tiered reveal logic (country for small nations, state/region for large nations)
+6. ⬜ Load Natural Earth admin-1 boundaries for large countries
+7. ⬜ Connect to Supabase for persistence (user accounts, saved visits)
+8. Sound polish: fine-tune crossfades, volumes, timing of arrival chime
+9. Final visual polish pass: lighting, colors, animation curves, typography
+10. Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
 
 ---
 
