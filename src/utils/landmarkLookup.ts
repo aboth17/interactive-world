@@ -48,13 +48,15 @@ export async function findLandmark(
     const dummyDiv = document.createElement('div');
     const service = new google.maps.places.PlacesService(dummyDiv);
 
-    // nearbySearch ranked by prominence (default when radius is set)
+    // textSearch with city name + type filter — Google ranks by relevance to the query,
+    // so "Rome" returns the Colosseum, "New York" returns Central Park / Statue of Liberty, etc.
     const results = await new Promise<google.maps.places.PlaceResult[]>(
       (resolve) => {
-        service.nearbySearch(
+        service.textSearch(
           {
+            query: `${cityName} top attraction`,
             location,
-            radius: 25000,
+            radius: 30000,
             type: 'tourist_attraction',
           },
           (results, status) => {
@@ -76,6 +78,13 @@ export async function findLandmark(
 
     if (results.length === 0) return null;
 
+    // Debug: log top results to see what Places API returned
+    console.log(`[Landmark] Results for "${cityName}":`);
+    for (let i = 0; i < Math.min(results.length, 5); i++) {
+      const r = results[i];
+      console.log(`  ${i + 1}. ${r.name} — ${r.user_ratings_total ?? 0} reviews, rating ${r.rating ?? 'n/a'}, loc: ${r.geometry?.location?.lat()}, ${r.geometry?.location?.lng()}`);
+    }
+
     // Pick the result with the most reviews from the top results
     let best = results[0];
     for (let i = 1; i < Math.min(results.length, 10); i++) {
@@ -85,6 +94,7 @@ export async function findLandmark(
     }
 
     if (best.geometry?.location) {
+      console.log(`[Landmark] Selected: "${best.name}" (${best.user_ratings_total} reviews)`);
       const landmark: CachedLandmark = {
         lat: best.geometry.location.lat(),
         lng: best.geometry.location.lng(),

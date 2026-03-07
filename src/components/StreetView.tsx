@@ -60,15 +60,19 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
       if (landmark) {
         targetLat = landmark.lat;
         targetLng = landmark.lng;
+        console.log(`[StreetView] Using landmark: ${landmark.name} at ${targetLat}, ${targetLng}`);
+      } else {
+        console.log(`[StreetView] No landmark found, using city center: ${lat}, ${lng}`);
       }
 
       const sv = new google.maps.StreetViewService();
 
       try {
+        // Use tight radius when we have a landmark, wider when falling back to city center
         const result = await sv.getPanorama({
           location: { lat: targetLat, lng: targetLng },
-          radius: 500,
-          preference: google.maps.StreetViewPreference.BEST,
+          radius: landmark ? 100 : 1000,
+          preference: google.maps.StreetViewPreference.NEAREST,
           source: google.maps.StreetViewSource.OUTDOOR,
         });
 
@@ -79,6 +83,8 @@ export default function StreetView({ lat, lng, cityName, onClose }: StreetViewPr
           setPhase('no-coverage');
           return;
         }
+
+        console.log(`[StreetView] Panorama found: "${panoLocation.description}" at ${panoLocation.latLng.lat()}, ${panoLocation.latLng.lng()} (pano: ${panoLocation.pano})`);
 
         recordApiCalls(1);
 
