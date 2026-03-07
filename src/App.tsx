@@ -26,6 +26,7 @@ export default function App() {
         <StreetView
           lat={streetView.lat}
           lng={streetView.lng}
+          cityName={streetView.name}
           onClose={() => setStreetView(null)}
         />
       )}

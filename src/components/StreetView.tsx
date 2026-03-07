@@ -1,24 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadGoogleMapsApi } from '../utils/googleMapsLoader';
-import { canLoadPanorama, recordPanoramaLoad } from '../utils/streetViewUsage';
+import { canUseApi, recordApiCalls } from '../utils/streetViewUsage';
+import { findLandmark } from '../utils/landmarkLookup';
 
 interface StreetViewProps {
   lat: number;
   lng: number;
+  cityName: string;
   onClose: () => void;
 }
 
 type Phase = 'fade-in' | 'loading' | 'active' | 'no-coverage' | 'fade-out' | 'over-limit';
 
-export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
+export default function StreetView({ lat, lng, cityName, onClose }: StreetViewProps) {
   const panoRef = useRef<HTMLDivElement>(null);
   const panoramaRef = useRef<google.maps.StreetViewPanorama | null>(null);
   const [phase, setPhase] = useState<Phase>('fade-in');
 
   useEffect(() => {
-    // Fade in from black
     const fadeTimer = setTimeout(() => {
-      if (!canLoadPanorama()) {
+      if (!canUseApi(2)) { // landmark lookup + panorama load
         setPhase('over-limit');
         return;
       }
@@ -41,13 +42,23 @@ export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
       }
       if (cancelled) return;
 
+      // Try to find a famous landmark in this city
+      let targetLat = lat;
+      let targetLng = lng;
+      const landmark = await findLandmark(cityName, lat, lng);
+      if (cancelled) return;
+      if (landmark) {
+        targetLat = landmark.lat;
+        targetLng = landmark.lng;
+      }
+
       const sv = new google.maps.StreetViewService();
 
       try {
         const result = await sv.getPanorama({
-          location: { lat, lng },
-          radius: 1000,
-          preference: google.maps.StreetViewPreference.NEAREST,
+          location: { lat: targetLat, lng: targetLng },
+          radius: 500,
+          preference: google.maps.StreetViewPreference.BEST,
           source: google.maps.StreetViewSource.OUTDOOR,
         });
 
@@ -59,13 +70,21 @@ export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
           return;
         }
 
-        recordPanoramaLoad();
+        recordApiCalls(1); // panorama load
+
+        // Compute heading from panorama position toward landmark
+        let heading = 0;
+        if (landmark) {
+          heading = google.maps.geometry?.spherical?.computeHeading(
+            panoLocation.latLng!,
+            new google.maps.LatLng(targetLat, targetLng),
+          ) ?? 0;
+        }
 
         const panorama = new google.maps.StreetViewPanorama(panoRef.current, {
           pano: panoLocation.pano!,
-          pov: { heading: 0, pitch: 0 },
+          pov: { heading, pitch: 10 },
           zoom: 1,
-          // Hide all Google chrome
           disableDefaultUI: true,
           showRoadLabels: false,
           motionTracking: false,
@@ -80,14 +99,13 @@ export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
 
     init();
     return () => { cancelled = true; };
-  }, [phase, lat, lng]);
+  }, [phase, lat, lng, cityName]);
 
   function handleClose() {
     setPhase('fade-out');
     setTimeout(onClose, 350);
   }
 
-  // Escape key to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') handleClose();
@@ -105,29 +123,24 @@ export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
       ...styles.overlay,
       opacity: phase === 'fade-in' ? 0 : 1,
     }}>
-      {/* Vignette */}
       <div style={styles.vignette} />
 
-      {/* Black fade layer */}
       <div style={{
         ...styles.blackScreen,
         opacity: showBlack ? 1 : 0,
         pointerEvents: showBlack ? 'auto' : 'none',
       }} />
 
-      {/* Panorama container */}
       {showPano && (
         <div ref={panoRef} style={styles.panoContainer} />
       )}
 
-      {/* Loading indicator */}
       {phase === 'loading' && (
         <div style={styles.centerMessage}>
           <div style={styles.loadingDot} />
         </div>
       )}
 
-      {/* No coverage / over limit message */}
       {showMessage && (
         <div style={styles.centerMessage}>
           <p style={styles.messageText}>
@@ -141,7 +154,6 @@ export default function StreetView({ lat, lng, onClose }: StreetViewProps) {
         </div>
       )}
 
-      {/* Close button */}
       {phase === 'active' && (
         <button onClick={handleClose} style={styles.closeButton} title="Return to globe (Esc)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

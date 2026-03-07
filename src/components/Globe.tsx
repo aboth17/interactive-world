@@ -266,38 +266,27 @@ export default function Globe({ onCityClick }: GlobeProps) {
 
     window.addEventListener('globe:flyto', onFlyTo);
 
-    // --- City click detection (for Street View) ---
+    // --- City click + hover detection (for Street View) ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let mouseDownPos = new THREE.Vector2();
 
-    function onMouseDown(e: MouseEvent) {
-      mouseDownPos.set(e.clientX, e.clientY);
-    }
-
-    function onMouseUp(e: MouseEvent) {
-      // Only treat as click if mouse didn't move much (not a drag)
-      const dx = e.clientX - mouseDownPos.x;
-      const dy = e.clientY - mouseDownPos.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 5) return;
-
+    function hitTestCities(clientX: number, clientY: number) {
       const cities = visitedStore.getCities();
-      if (cities.length === 0) return;
+      if (cities.length === 0) return null;
 
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
 
-      // Check distance from ray to each city position
       const camDist = camera.position.length();
-      const threshold = 0.15 + (camDist / MAX_DISTANCE) * 0.3; // Larger hit area when zoomed out
+      const threshold = 0.15 + (camDist / MAX_DISTANCE) * 0.3;
 
       let closestDist = Infinity;
       let closestCity: typeof cities[0] | null = null;
 
       for (const city of cities) {
         const worldPos = latLngToVector3(city.lat, city.lng, GLOBE_RADIUS + 0.02);
-        // Apply earth rotation
         worldPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), earth.rotation.y);
         const dist = raycaster.ray.distanceToPoint(worldPos);
         if (dist < threshold && dist < closestDist) {
@@ -306,13 +295,32 @@ export default function Globe({ onCityClick }: GlobeProps) {
         }
       }
 
-      if (closestCity && onCityClick) {
-        onCityClick(closestCity.lat, closestCity.lng, closestCity.name);
+      return closestCity;
+    }
+
+    function onMouseDown(e: MouseEvent) {
+      mouseDownPos.set(e.clientX, e.clientY);
+    }
+
+    function onMouseUp(e: MouseEvent) {
+      const dx = e.clientX - mouseDownPos.x;
+      const dy = e.clientY - mouseDownPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) return;
+
+      const city = hitTestCities(e.clientX, e.clientY);
+      if (city && onCityClick) {
+        onCityClick(city.lat, city.lng, city.name);
       }
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      const city = hitTestCities(e.clientX, e.clientY);
+      renderer.domElement.style.cursor = city ? 'pointer' : '';
     }
 
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
 
     // Atmosphere
     const atmosphereGeometry = new THREE.SphereGeometry(ATMOSPHERE_RADIUS, 128, 64);
@@ -490,6 +498,7 @@ export default function Globe({ onCityClick }: GlobeProps) {
       window.removeEventListener('globe:flyto', onFlyTo);
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       renderer.domElement.removeEventListener('mouseup', onMouseUp);
+      renderer.domElement.removeEventListener('mousemove', onMouseMove);
       unsubscribeStore();
       clearTimeout(interactionTimeout);
       if (sceneRef.current) {

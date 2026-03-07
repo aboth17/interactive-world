@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'world-explorer-sv-usage';
-const MONTHLY_LIMIT = 5000; // Dynamic Street View free tier
+const STORAGE_KEY = 'world-explorer-api-usage';
+const MONTHLY_LIMIT = 5000;
 
 interface UsageData {
   month: string; // "YYYY-MM"
@@ -15,7 +15,6 @@ function load(): UsageData {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) {
     const data: UsageData = JSON.parse(stored);
-    // Reset if month rolled over
     if (data.month !== currentMonth()) {
       return { month: currentMonth(), count: 0 };
     }
@@ -28,13 +27,15 @@ function save(data: UsageData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-export function canLoadPanorama(): boolean {
-  return load().count < MONTHLY_LIMIT;
+/** Check if we have budget for N API calls. */
+export function canUseApi(calls = 1): boolean {
+  return load().count + calls <= MONTHLY_LIMIT;
 }
 
-export function recordPanoramaLoad(): void {
+/** Record N Google Maps API calls (panorama loads, places lookups, etc.) */
+export function recordApiCalls(calls = 1): void {
   const data = load();
-  data.count += 1;
+  data.count += calls;
   save(data);
 }
 
