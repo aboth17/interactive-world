@@ -15,7 +15,7 @@ export function loadGoogleMapsApi(): Promise<void> {
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=streetView`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=streetView,places,geometry`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
