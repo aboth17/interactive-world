@@ -361,9 +361,7 @@ The build is sequenced so that each phase produces something visually impressive
 1. ✅ Bundle GeoNames city database (~23k cities, ~2MB JSON)
 2. ✅ Build the search input with instant local autocomplete
 3. ✅ Add city pin layer with ember glow
-4. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon
-5. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
-6. ✅ Exploration stats overlay (countries visited count + percentage of 195 UN countries)
+4. ✅ Exploration stats overlay (countries visited count + percentage of 195 UN countries)
 
 **Exit criteria:** Adding a new place feels like a rewarding moment of discovery. The arrival animation is smooth and emotionally satisfying. The sound and visual reward are perfectly synced.
 
@@ -371,13 +369,17 @@ The build is sequenced so that each phase produces something visually impressive
 
 **Goal:** Click a city, dive into an immersive 360 panorama.
 
-1. Set up Google Street View JS API with server-side key proxy
-2. Build the panorama viewer component with custom controls (no Google chrome)
-3. Implement the zoom-dive transition: camera dives toward surface, cinematic fade-through-black, panorama opens
-4. Auto-orient the initial panorama camera toward the most interesting direction
-5. Build the exit animation: fade to black, return to globe at city position
-6. Add vignette and framing effects to the panorama viewer
-7. Handle locations with no Street View coverage gracefully (show a message, don't break the experience)
+1. ✅ Set up Google Street View JS API (client-side key with localhost restriction for local dev)
+2. ✅ Build the panorama viewer component with custom controls (no Google chrome)
+3. ✅ Implement cinematic fade-through-black transition (globe → black → panorama → black → globe)
+4. ⬜ Auto-orient the initial panorama camera toward the most interesting direction
+5. ✅ Build the exit animation: fade to black, return to globe (Esc key or close button)
+6. ✅ Add vignette framing effect to the panorama viewer
+7. ✅ Handle locations with no Street View coverage gracefully (message + return button)
+8. ✅ Monthly API usage tracking with 5,000 panorama limit (localStorage)
+9. ✅ City pin click detection via raycasting on globe
+
+**Note:** For local development, the API key is loaded client-side from `.env.local` with localhost/referrer restriction. For production, this must be replaced with a Vercel serverless proxy (see Production Deployment section below).
 
 **Exit criteria:** The transition from space to street level feels cinematic and intentional. The panorama viewer feels like part of the app, not an embedded Google widget.
 
@@ -407,9 +409,24 @@ The build is sequenced so that each phase produces something visually impressive
 5. ⬜ Implement the tiered reveal logic (country for small nations, state/region for large nations)
 6. ⬜ Load Natural Earth admin-1 boundaries for large countries
 7. ⬜ Connect to Supabase for persistence (user accounts, saved visits)
-8. Sound polish: fine-tune crossfades, volumes, timing of arrival chime
-9. Final visual polish pass: lighting, colors, animation curves, typography
-10. Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
+8. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon
+9. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
+10. Sound polish: fine-tune crossfades, volumes, timing of arrival chime
+11. Final visual polish pass: lighting, colors, animation curves, typography
+12. Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
+
+---
+
+## Production Deployment (Pre-Launch Checklist)
+
+Before going live, the following must be completed. These are deferred from earlier phases to keep the build focused on functionality during local development.
+
+1. **Vercel serverless proxy for Google API key** — Move the Street View API key from client-side `.env.local` to a Vercel Edge/Serverless function that proxies requests. The client never sees the key in production. Apply HTTP referrer and API-specific restrictions on the key as defense-in-depth.
+2. **Supabase setup** — Provision Supabase project (free tier). Create `users` and `visits` tables per the schema in the Tech Stack section. Enable Row Level Security on all tables. Migrate persistence from localStorage to Supabase.
+3. **Supabase Auth** — Enable email/password or OAuth (Google, GitHub). Wire up auth flow so users can access their map across devices.
+4. **Environment variables** — All secrets stored in Vercel environment variables. `.env.example` documents required vars without exposing values.
+5. **Content Security Policy** — Set CSP headers restricting resource loading to known domains (Google APIs, Supabase, CDN).
+6. **Domain + deploy** — Configure custom domain on Vercel, verify SSL, set up production environment.
 
 ---
 
