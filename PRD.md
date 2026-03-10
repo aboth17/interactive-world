@@ -354,21 +354,15 @@ The build is sequenced so that each phase produces something visually impressive
 
 **Exit criteria:** The contrast between explored and unexplored is dramatic and beautiful. The fog has subtle depth variation and living animation. Visited cities glow like embers. With sound enabled, the globe feels alive.
 
-### Phase 3: Manual Entry + Reveal Logic (Week 4)
+### Phase 3: Manual Entry ✅
 
 **Goal:** Type a city name, watch the globe come alive.
 
 1. ✅ Bundle GeoNames city database (~23k cities, ~2MB JSON)
 2. ✅ Build the search input with instant local autocomplete
-3. ⬜ Add Nominatim fallback for disambiguation
-4. ⬜ Implement the tiered reveal logic (country for small nations, state/region for large nations)
-5. ⬜ Load Natural Earth admin-1 boundaries for large countries
-6. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon
-7. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
-8. ✅ Add city pin layer with ember glow
-9. ⬜ Connect to Supabase for persistence (user accounts, saved visits)
+3. ✅ Add city pin layer with ember glow
 
-**Exit criteria:** Adding a new place feels like a rewarding moment of discovery. The arrival animation is smooth and emotionally satisfying. The sound and visual reward are perfectly synced.
+**Exit criteria:** Users can search and add cities/countries with instant local autocomplete.
 
 ### Phase 4: Street-Level Drill-Down (Week 5)
 
@@ -384,33 +378,59 @@ The build is sequenced so that each phase produces something visually impressive
 
 **Exit criteria:** The transition from space to street level feels cinematic and intentional. The panorama viewer feels like part of the app, not an embedded Google widget.
 
-### Phase 5: Photo Integration (Week 6)
+### Phase 5: Photo Integration + Persistence + Onboarding
 
-**Goal:** Your photos appear on YOUR map.
+**Goal:** Full photo format support, cloud persistence, and guided first-run experience.
 
-1. Build the photo upload/drop zone (client-side only)
-2. Integrate exifr for GPS extraction
-3. Store photos in IndexedDB (local only)
-4. Cluster photos by proximity and associate with visits
-5. Build the photo thumbnail layer (appears when zoomed into visited cities)
-6. Add parallax/depth effect on thumbnails during pan
-7. Build the photo lightbox viewer
-8. Handle photos without GPS data (manual placement flow)
+#### 5A: Extended Photo Format Support
+1. ⬜ Add .png file support with EXIF/metadata extraction
+2. ⬜ Add .heic file support (iPhone native format) with EXIF GPS extraction
+3. ⬜ Store photos in IndexedDB (local only)
+4. ⬜ Cluster photos by proximity and associate with visits
+5. ⬜ Build the photo thumbnail layer (appears when zoomed into visited cities)
+6. ⬜ Add parallax/depth effect on thumbnails during pan
+7. ⬜ Build the photo lightbox viewer
+8. ⬜ Handle photos without GPS data (manual placement flow)
 
-**Exit criteria:** Seeing your own photos emerge from the map as you zoom into a city you visited feels personal and magical.
+#### 5B: Persistence + User Accounts
+9. ⬜ Set up Supabase project (free tier: PostgreSQL + Auth)
+10. ⬜ Implement user authentication (email/password + Google OAuth)
+11. ⬜ Create database schema (users, visits tables)
+12. ⬜ Enable Row Level Security — users can only access their own data
+13. ⬜ Sync visited countries/cities to Supabase (replace localStorage as primary store, keep as offline fallback)
+14. ⬜ Handle offline/online transitions gracefully
 
-### Phase 6: Polish and Performance (Week 7)
+#### 5C: Onboarding Flow
+15. ⬜ Build first-run onboarding overlay (cinematic, minimal, matches dark aesthetic)
+16. ⬜ Step 1: "Add countries you've visited" — explain manual country/city entry via search (Cmd+K)
+17. ⬜ Step 2: "Drop your photos" — explain photo import with auto-location detection
+18. ⬜ Step 3: "Explore street view" — explain clicking city pins to dive into Google Street View
+19. ⬜ Step 4: "Watch your world light up" — explain fog of war reveal and exploration stats
+20. ⬜ Allow skipping, remember completion state, show a "?" help button to replay
 
-**Goal:** Production-quality experience.
+**Exit criteria:** New users understand every feature within 30 seconds. Photos from iPhones (.heic) and all common formats work seamlessly. User data persists across devices via Supabase.
 
-1. Performance audit: optimize polygon rendering, texture loading, shader complexity
-2. Mobile optimization: touch controls, responsive layout, reduced polygon detail on mobile
-3. Implement zoom-dependent rendering (polygons at globe scale, more detail when zoomed
-3. Loading experience: elegant loading state while globe assets initialize
-4. Exploration stats display (F7)
-5. Sound polish: fine-tune crossfades, volumes, timing of arrival chime
-6. Final visual polish pass: lighting, colors, animation curves, typography
-7. Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
+### Phase 6: Polish, Performance, and Advanced Reveal
+
+**Goal:** Production-quality experience with rewarding animations and full geographic fidelity.
+
+#### 6A: Arrival Animation + Sound
+1. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon (~1.5s, sunrise feel)
+2. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
+
+#### 6B: Tiered Reveal Logic
+3. ⬜ Implement tiered reveal logic (country for small nations, state/region for large nations)
+4. ⬜ Load Natural Earth admin-1 boundaries for large countries (US, Canada, China, Russia, Australia, Brazil, India)
+5. ⬜ Add Nominatim fallback for geocoding disambiguation
+
+#### 6C: Performance + Polish
+6. ⬜ Performance audit: optimize polygon rendering, texture loading, shader complexity
+7. ⬜ Mobile optimization: touch controls, responsive layout, reduced polygon detail on mobile
+8. ⬜ Implement zoom-dependent rendering (polygons at globe scale, more detail when zoomed)
+9. ⬜ Loading experience: elegant loading state while globe assets initialize
+10. ⬜ Sound polish: fine-tune crossfades, volumes, timing
+11. ⬜ Final visual polish pass: lighting, colors, animation curves, typography
+12. ⬜ Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
 
 ---
 
