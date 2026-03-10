@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import exifr from 'exifr';
 import { getCountryAtPoint, getNearestCity } from '../utils/geoData';
 import { visitedStore } from '../stores/visitedStore';
@@ -18,9 +18,14 @@ export default function PhotoImport() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
 
-  async function handleFiles(files: FileList) {
-    const arr = Array.from(files);
+  async function handleFiles(files: FileList | File[]) {
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+    if (arr.length === 0) return;
+
+    setDragging(false);
     setPhase('scanning');
     setProgress(0);
     setResult(null);
@@ -88,80 +93,176 @@ export default function PhotoImport() {
     setProgress(0);
   }
 
+  // --- Global drag-and-drop listeners ---
+  const onDragEnter = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer?.types.includes('Files')) {
+      setDragging(true);
+    }
+  }, []);
+
+  const onDragLeave = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setDragging(false);
+    }
+  }, []);
+
+  const onDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const onDrop = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragging(false);
+    if (e.dataTransfer?.files.length) {
+      handleFiles(e.dataTransfer.files);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [onDragEnter, onDragLeave, onDragOver, onDrop]);
+
   return (
-    <div style={styles.wrapper}>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        style={{ display: 'none' }}
-        onChange={onFileChange}
-      />
-
-      {phase === 'idle' && (
-        <button style={styles.btn} onClick={() => inputRef.current?.click()} title="Import photos">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="M21 15l-5-5L5 21" />
-          </svg>
-          <span style={styles.btnLabel}>Import Photos</span>
-        </button>
-      )}
-
-      {phase === 'scanning' && (
-        <div style={styles.panel}>
-          <div style={styles.panelLabel}>Scanning photos… {progress}%</div>
-          <div style={styles.barTrack}>
-            <div style={{ ...styles.barFill, width: `${progress}%` }} />
+    <>
+      {/* Full-page drop overlay */}
+      {dragging && (
+        <div style={styles.dropOverlay}>
+          <div style={styles.dropContent}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 190, 80, 0.8)" strokeWidth="1">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+            <div style={styles.dropText}>Drop photos to scan</div>
+            <div style={styles.dropSubtext}>GPS data will be used to light up your globe</div>
           </div>
         </div>
       )}
 
-      {phase === 'done' && result && (
-        <div style={styles.panel}>
-          <div style={styles.resultHeader}>
-            {result.withGps > 0 ? '✦ Scan complete' : 'No GPS data found'}
+      <div style={styles.wrapper}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,.heic,.heif"
+          multiple
+          style={{ display: 'none' }}
+          onChange={onFileChange}
+        />
+
+        {phase === 'idle' && (
+          <button style={styles.btn} onClick={() => inputRef.current?.click()} title="Import photos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+            <span style={styles.btnLabel}>Import Photos</span>
+          </button>
+        )}
+
+        {phase === 'scanning' && (
+          <div style={styles.panel}>
+            <div style={styles.panelLabel}>Scanning photos... {progress}%</div>
+            <div style={styles.barTrack}>
+              <div style={{ ...styles.barFill, width: `${progress}%` }} />
+            </div>
           </div>
-          <div style={styles.stats}>
-            <span style={styles.stat}>{result.total} photos</span>
-            <span style={styles.statSep}>·</span>
-            <span style={styles.stat}>{result.withGps} with GPS</span>
-            {result.skipped > 0 && (
-              <>
-                <span style={styles.statSep}>·</span>
-                <span style={styles.statDim}>{result.skipped} skipped</span>
-              </>
+        )}
+
+        {phase === 'done' && result && (
+          <div style={styles.panel}>
+            <div style={styles.resultHeader}>
+              {result.withGps > 0 ? '\u2726 Scan complete' : 'No GPS data found'}
+            </div>
+            <div style={styles.stats}>
+              <span style={styles.stat}>{result.total} photos</span>
+              <span style={styles.statSep}>\u00b7</span>
+              <span style={styles.stat}>{result.withGps} with GPS</span>
+              {result.skipped > 0 && (
+                <>
+                  <span style={styles.statSep}>\u00b7</span>
+                  <span style={styles.statDim}>{result.skipped} skipped</span>
+                </>
+              )}
+            </div>
+            {result.countriesAdded.length > 0 && (
+              <div style={styles.list}>
+                <div style={styles.listLabel}>New countries</div>
+                {result.countriesAdded.map(c => (
+                  <div key={c} style={styles.listItem}>+ {c}</div>
+                ))}
+              </div>
             )}
+            {result.citiesAdded.length > 0 && (
+              <div style={styles.list}>
+                <div style={styles.listLabel}>New cities</div>
+                {result.citiesAdded.map(c => (
+                  <div key={c} style={styles.listItem}>+ {c}</div>
+                ))}
+              </div>
+            )}
+            {result.countriesAdded.length === 0 && result.citiesAdded.length === 0 && result.withGps > 0 && (
+              <div style={styles.statDim}>All places already marked.</div>
+            )}
+            <button style={styles.doneBtn} onClick={reset}>Done</button>
           </div>
-          {result.countriesAdded.length > 0 && (
-            <div style={styles.list}>
-              <div style={styles.listLabel}>New countries</div>
-              {result.countriesAdded.map(c => (
-                <div key={c} style={styles.listItem}>+ {c}</div>
-              ))}
-            </div>
-          )}
-          {result.citiesAdded.length > 0 && (
-            <div style={styles.list}>
-              <div style={styles.listLabel}>New cities</div>
-              {result.citiesAdded.map(c => (
-                <div key={c} style={styles.listItem}>+ {c}</div>
-              ))}
-            </div>
-          )}
-          {result.countriesAdded.length === 0 && result.citiesAdded.length === 0 && result.withGps > 0 && (
-            <div style={styles.statDim}>All places already marked.</div>
-          )}
-          <button style={styles.doneBtn} onClick={reset}>Done</button>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  dropOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 9999,
+    background: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  dropContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 16,
+    padding: '48px 64px',
+    border: '1px solid rgba(255, 190, 80, 0.25)',
+    borderRadius: 24,
+    background: 'rgba(8, 8, 18, 0.6)',
+  },
+  dropText: {
+    color: 'rgba(255, 190, 80, 0.9)',
+    fontSize: 18,
+    fontFamily: "'Inter', system-ui, sans-serif",
+    fontWeight: 300,
+    letterSpacing: '0.02em',
+  },
+  dropSubtext: {
+    color: 'rgba(255, 255, 255, 0.35)',
+    fontSize: 13,
+    fontFamily: "'Inter', system-ui, sans-serif",
+    fontWeight: 300,
+  },
   wrapper: {
     position: 'fixed',
     bottom: 36,

@@ -383,8 +383,8 @@ The build is sequenced so that each phase produces something visually impressive
 **Goal:** Full photo format support, cloud persistence, and guided first-run experience.
 
 #### 5A: Extended Photo Format Support
-1. ⬜ Add .png file support with EXIF/metadata extraction
-2. ⬜ Add .heic file support (iPhone native format) with EXIF GPS extraction
+1. ✅ Add .png file support with EXIF/metadata extraction (exifr handles natively)
+2. ✅ Add .heic file support (iPhone native format) with EXIF GPS extraction (exifr handles natively, file picker updated)
 3. ⬜ Store photos in IndexedDB (local only)
 4. ⬜ Cluster photos by proximity and associate with visits
 5. ⬜ Build the photo thumbnail layer (appears when zoomed into visited cities)
@@ -408,7 +408,13 @@ The build is sequenced so that each phase produces something visually impressive
 19. ⬜ Step 4: "Watch your world light up" — explain fog of war reveal and exploration stats
 20. ⬜ Allow skipping, remember completion state, show a "?" help button to replay
 
-**Exit criteria:** New users understand every feature within 30 seconds. Photos from iPhones (.heic) and all common formats work seamlessly. User data persists across devices via Supabase.
+#### 5D: Shareable Globe Link
+21. ⬜ Add a public read-only route (`/globe/:userId`) that renders another user's globe
+22. ⬜ Add a "Share" button that copies the public link to clipboard
+23. ⬜ Public view is read-only — no search, no photo import, no editing. Just the cinematic globe with their visited places glowing
+24. ⬜ Supabase RLS policy: visits rows are publicly readable when user opts into sharing
+
+**Exit criteria:** New users understand every feature within 30 seconds. Photos from iPhones (.heic) and all common formats work seamlessly. User data persists across devices via Supabase. Users can share a link to their globe that looks stunning.
 
 ### Phase 6: Polish, Performance, and Advanced Reveal
 
