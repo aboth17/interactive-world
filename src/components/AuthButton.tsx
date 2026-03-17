@@ -1,43 +1,73 @@
 import { useState, useEffect, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { signInWithGoogle, signOut, isAnonymous } from '../lib/auth';
+import { visitedStore } from '../stores/visitedStore';
 
 const NUDGE_DISMISSED_KEY = 'world-explorer-nudge-dismissed';
 const NUDGE_DISMISS_DAYS = 7;
+const SETTINGS_KEY = 'world-explorer-settings';
+
+interface Settings {
+  showLabels: boolean;
+  globeAutoRotate: boolean;
+}
+
+const defaultSettings: Settings = {
+  showLabels: true,
+  globeAutoRotate: true,
+};
+
+function loadSettings(): Settings {
+  try {
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    if (stored) return { ...defaultSettings, ...JSON.parse(stored) };
+  } catch { /* ignore */ }
+  return defaultSettings;
+}
+
+function saveSettings(s: Settings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  window.dispatchEvent(new CustomEvent('world-explorer-settings', { detail: s }));
+}
 
 function isNudgeDismissed(): boolean {
   const dismissed = localStorage.getItem(NUDGE_DISMISSED_KEY);
   if (!dismissed) return false;
-  const dismissedAt = new Date(dismissed).getTime();
-  return Date.now() - dismissedAt < NUDGE_DISMISS_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() - new Date(dismissed).getTime() < NUDGE_DISMISS_DAYS * 86400000;
 }
 
 function dismissNudge() {
   localStorage.setItem(NUDGE_DISMISSED_KEY, new Date().toISOString());
 }
 
-export default function AuthButton({ user }: { user: User | null }) {
+const glass = {
+  background: 'rgba(4, 4, 12, 0.55)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+} as const;
+
+export default function AuthButton({ user, onUserChange }: { user: User | null; onUserChange?: (user: User) => void }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState(loadSettings);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const anon = isAnonymous(user);
+  const showSignIn = !user || anon;
 
   useEffect(() => {
-    if (anon && !isNudgeDismissed()) {
+    if (showSignIn && !isNudgeDismissed()) {
       const timer = setTimeout(() => setShowNudge(true), 3000);
       return () => clearTimeout(timer);
     }
     setShowNudge(false);
-  }, [anon]);
+  }, [showSignIn]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
     }
@@ -45,13 +75,18 @@ export default function AuthButton({ user }: { user: User | null }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    saveSettings(next);
+  }
+
   async function handleSignIn() {
     setLoading(true);
     try {
       await signInWithGoogle();
     } catch (err) {
       console.error('Sign in failed:', err);
-    } finally {
       setLoading(false);
     }
   }
@@ -60,7 +95,10 @@ export default function AuthButton({ user }: { user: User | null }) {
     setDropdownOpen(false);
     setLoading(true);
     try {
-      await signOut();
+      const anonUser = await signOut();
+      onUserChange?.(anonUser);
+      visitedStore.reset();
+      await visitedStore.init(anonUser.id);
     } catch (err) {
       console.error('Sign out failed:', err);
     } finally {
@@ -68,49 +106,34 @@ export default function AuthButton({ user }: { user: User | null }) {
     }
   }
 
-  if (!user) return null;
-
-  const avatarUrl = user.user_metadata?.avatar_url;
+  const avatarUrl = user?.user_metadata?.avatar_url;
   const displayName =
-    user.user_metadata?.full_name || user.user_metadata?.name || user.email;
+    user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email;
 
   return (
-    <div
-      ref={dropdownRef}
-      style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000 }}
-    >
-      {anon ? (
+    <div ref={dropdownRef} style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
+      {showSignIn ? (
         <>
           <button
             onClick={handleSignIn}
             disabled={loading}
             style={{
-              background: 'rgba(0, 0, 0, 0.6)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 8,
-              color: '#f5f5f5',
+              ...glass,
+              borderRadius: 10,
+              color: 'rgba(255, 255, 255, 0.85)',
               padding: '8px 16px',
               cursor: loading ? 'wait' : 'pointer',
               fontSize: 13,
-              fontWeight: 500,
+              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+              fontWeight: 400,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              opacity: loading ? 0.6 : 1,
+              opacity: loading ? 0.5 : 1,
+              transition: 'opacity 0.2s',
             }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
               <polyline points="10 17 15 12 10 7" />
               <line x1="15" y1="12" x2="3" y2="12" />
@@ -118,40 +141,30 @@ export default function AuthButton({ user }: { user: User | null }) {
             Sign in
           </button>
           {showNudge && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 8,
-                background: 'rgba(0, 0, 0, 0.7)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                color: 'rgba(245, 158, 11, 0.9)',
-                fontSize: 12,
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 8,
+              ...glass,
+              borderColor: 'rgba(245, 158, 11, 0.2)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              color: 'rgba(245, 158, 11, 0.85)',
+              fontSize: 11,
+              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
               Sign in to sync across devices
               <button
-                onClick={() => {
-                  dismissNudge();
-                  setShowNudge(false);
-                }}
+                onClick={() => { dismissNudge(); setShowNudge(false); }}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  cursor: 'pointer',
-                  padding: '0 2px',
-                  fontSize: 14,
-                  lineHeight: 1,
+                  background: 'none', border: 'none',
+                  color: 'rgba(255, 255, 255, 0.4)', cursor: 'pointer',
+                  padding: '0 2px', fontSize: 12, lineHeight: 1,
                 }}
               >
                 x
@@ -164,65 +177,106 @@ export default function AuthButton({ user }: { user: User | null }) {
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
             style={{
-              background: 'rgba(0, 0, 0, 0.6)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 8,
-              color: '#f5f5f5',
-              padding: '6px 12px',
+              ...glass,
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              padding: 0,
               cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              justifyContent: 'center',
+              overflow: 'hidden',
+              transition: 'border-color 0.2s',
+              borderColor: dropdownOpen ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.06)',
             }}
           >
             {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                }}
-              />
+              <img src={avatarUrl} alt="" style={{ width: 40, height: 40, objectFit: 'cover' }} />
             ) : (
-              <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  background: 'rgba(245, 158, 11, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                }}
-              >
-                {displayName?.[0]?.toUpperCase() || '?'}
-              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
             )}
-            {displayName}
           </button>
+
           {dropdownOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 4,
-                background: 'rgba(0, 0, 0, 0.8)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 8,
-                overflow: 'hidden',
-                minWidth: 140,
-              }}
-            >
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 8,
+              ...glass,
+              background: 'rgba(4, 4, 12, 0.85)',
+              borderRadius: 12,
+              minWidth: 220,
+              overflow: 'hidden',
+              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+            }}>
+              {/* User info */}
+              <div style={{
+                padding: '14px 16px 12px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                ) : (
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: 'rgba(245, 158, 11, 0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'rgba(245, 158, 11, 0.9)', fontSize: 14, fontWeight: 500,
+                  }}>
+                    {displayName?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.9)', fontSize: 13, fontWeight: 500,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {displayName || 'User'}
+                  </div>
+                  {user?.email && (
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.4)', fontSize: 11,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {user.email}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Settings */}
+              <div style={{ padding: '8px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <div style={{
+                  padding: '4px 16px 6px',
+                  color: 'rgba(255, 255, 255, 0.35)',
+                  fontSize: 10,
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}>
+                  Settings
+                </div>
+                <ToggleRow
+                  label="City labels"
+                  checked={settings.showLabels}
+                  onChange={(v) => updateSetting('showLabels', v)}
+                />
+                <ToggleRow
+                  label="Auto-rotate globe"
+                  checked={settings.globeAutoRotate}
+                  onChange={(v) => updateSetting('globeAutoRotate', v)}
+                />
+              </div>
+
+              {/* Sign out */}
               <button
                 onClick={handleSignOut}
                 disabled={loading}
@@ -230,13 +284,17 @@ export default function AuthButton({ user }: { user: User | null }) {
                   width: '100%',
                   background: 'none',
                   border: 'none',
-                  color: '#f5f5f5',
+                  color: 'rgba(255, 100, 100, 0.8)',
                   padding: '10px 16px',
                   cursor: loading ? 'wait' : 'pointer',
                   fontSize: 13,
                   textAlign: 'left',
-                  opacity: loading ? 0.6 : 1,
+                  fontFamily: 'inherit',
+                  opacity: loading ? 0.5 : 1,
+                  transition: 'background 0.15s',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
               >
                 Sign out
               </button>
@@ -245,5 +303,52 @@ export default function AuthButton({ user }: { user: User | null }) {
         </>
       )}
     </div>
+  );
+}
+
+function ToggleRow({ label, checked, onChange }: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      style={{
+        width: '100%',
+        background: 'none',
+        border: 'none',
+        padding: '7px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+    >
+      <span style={{ color: 'rgba(255, 255, 255, 0.75)', fontSize: 13 }}>{label}</span>
+      <div style={{
+        width: 32,
+        height: 18,
+        borderRadius: 9,
+        background: checked ? 'rgba(245, 158, 11, 0.5)' : 'rgba(255, 255, 255, 0.1)',
+        position: 'relative',
+        transition: 'background 0.2s',
+      }}>
+        <div style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          background: checked ? 'rgba(245, 158, 11, 0.95)' : 'rgba(255, 255, 255, 0.4)',
+          position: 'absolute',
+          top: 2,
+          left: checked ? 16 : 2,
+          transition: 'left 0.2s, background 0.2s',
+        }} />
+      </div>
+    </button>
   );
 }

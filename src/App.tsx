@@ -24,30 +24,38 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
 
+    console.log('[App] useEffect fired, cancelled:', cancelled);
+
     ensureSession()
       .then(async (u) => {
+        console.log('[App] ensureSession resolved, cancelled:', cancelled, 'user:', u.id, 'anon:', u.is_anonymous);
         if (cancelled) return;
         setUser(u);
         await visitedStore.init(u.id);
         setAuthReady(true);
+        console.log('[App] authReady set to true');
       })
       .catch((err) => {
-        console.error('Auth init failed:', err);
-        // App still works with localStorage-cached data
+        console.error('[App] Auth init failed:', err);
         setAuthReady(true);
       });
 
-    const subscription = onAuthChange(async (_event, session) => {
+    // Listen for auth changes after the initial load (e.g. cross-tab sign-in).
+    // Sign-out is handled directly by AuthButton via onUserChange.
+    // Do NOT call visitedStore.init() here — it makes Supabase queries that
+    // deadlock if still inside the auth lock context. ensureSession handles init.
+    const subscription = onAuthChange(async (event, session) => {
+      console.log('[App] onAuthChange event:', event, 'cancelled:', cancelled);
       if (cancelled) return;
+      if (event !== 'SIGNED_IN') return;
       const newUser = session?.user ?? null;
+      if (!newUser) return;
+      console.log('[App] SIGNED_IN: updating user to', newUser.id, 'anon:', newUser.is_anonymous);
       setUser(newUser);
-      if (newUser) {
-        visitedStore.reset();
-        await visitedStore.init(newUser.id);
-      }
     });
 
     return () => {
+      console.log('[App] useEffect cleanup, setting cancelled = true');
       cancelled = true;
       subscription.unsubscribe();
     };
@@ -60,7 +68,7 @@ export default function App() {
       {!streetView && <SearchInput />}
       {!streetView && <AudioToggle />}
       {!streetView && <PhotoImport />}
-      {!streetView && authReady && <AuthButton user={user} />}
+      {!streetView && authReady && <AuthButton user={user} onUserChange={setUser} />}
       {streetView && (
         <StreetView
           lat={streetView.lat}
