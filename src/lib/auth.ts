@@ -70,6 +70,18 @@ export async function signOut(): Promise<User> {
   return data.user!;
 }
 
+/**
+ * Permanently delete the current user's account and all associated data,
+ * then create a fresh anonymous session.
+ */
+export async function deleteAccount(): Promise<User> {
+  const { error } = await supabase.rpc('delete_own_account');
+  if (error) throw error;
+  const { data, error: anonError } = await supabase.auth.signInAnonymously();
+  if (anonError) throw anonError;
+  return data.user!;
+}
+
 export function isAnonymous(user: User | null): boolean {
   return user?.is_anonymous === true;
 }

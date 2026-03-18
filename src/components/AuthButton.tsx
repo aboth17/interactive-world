@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { signInWithGoogle, signOut, isAnonymous } from '../lib/auth';
+import { signInWithGoogle, signOut, deleteAccount, isAnonymous } from '../lib/auth';
 import { visitedStore } from '../stores/visitedStore';
 
 const NUDGE_DISMISSED_KEY = 'world-explorer-nudge-dismissed';
@@ -69,6 +69,7 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
+        setConfirmDelete(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -106,9 +107,30 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
     }
   }
 
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const displayName =
     user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email;
+
+  async function handleDeleteAccount() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDropdownOpen(false);
+    setConfirmDelete(false);
+    setLoading(true);
+    try {
+      const anonUser = await deleteAccount();
+      onUserChange?.(anonUser);
+      visitedStore.reset();
+      await visitedStore.init(anonUser.id);
+    } catch (err) {
+      console.error('Delete account failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div ref={dropdownRef} style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
@@ -191,14 +213,10 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
               borderColor: dropdownOpen ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.06)',
             }}
           >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" style={{ width: 40, height: 40, objectFit: 'cover' }} />
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            )}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
           </button>
 
           {dropdownOpen && (
@@ -222,18 +240,14 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
                 alignItems: 'center',
                 gap: 10,
               }}>
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
-                ) : (
-                  <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    background: 'rgba(245, 158, 11, 0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'rgba(245, 158, 11, 0.9)', fontSize: 14, fontWeight: 500,
-                  }}>
-                    {displayName?.[0]?.toUpperCase() || '?'}
-                  </div>
-                )}
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'rgba(245, 158, 11, 0.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'rgba(245, 158, 11, 0.9)', fontSize: 14, fontWeight: 500,
+                }}>
+                  {displayName?.[0]?.toUpperCase() || '?'}
+                </div>
                 <div style={{ overflow: 'hidden' }}>
                   <div style={{
                     color: 'rgba(255, 255, 255, 0.9)', fontSize: 13, fontWeight: 500,
@@ -284,7 +298,7 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
                   width: '100%',
                   background: 'none',
                   border: 'none',
-                  color: 'rgba(255, 100, 100, 0.8)',
+                  color: 'rgba(255, 255, 255, 0.6)',
                   padding: '10px 16px',
                   cursor: loading ? 'wait' : 'pointer',
                   fontSize: 13,
@@ -297,6 +311,30 @@ export default function AuthButton({ user, onUserChange }: { user: User | null; 
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
               >
                 Sign out
+              </button>
+
+              {/* Delete account */}
+              <button
+                onClick={handleDeleteAccount}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  background: confirmDelete ? 'rgba(255, 60, 60, 0.12)' : 'none',
+                  border: 'none',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  color: 'rgba(255, 80, 80, 0.85)',
+                  padding: '10px 16px',
+                  cursor: loading ? 'wait' : 'pointer',
+                  fontSize: 12,
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
+                  opacity: loading ? 0.5 : 1,
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { if (!confirmDelete) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'; }}
+                onMouseLeave={(e) => { if (!confirmDelete) e.currentTarget.style.background = 'none'; }}
+              >
+                {confirmDelete ? 'Tap again to confirm deletion' : 'Delete account'}
               </button>
             </div>
           )}
