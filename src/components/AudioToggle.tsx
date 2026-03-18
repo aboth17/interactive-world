@@ -17,7 +17,7 @@ export default function AudioToggle() {
       style={{
         position: 'fixed',
         bottom: 24,
-        right: 24,
+        left: 24,
         background: 'rgba(255, 255, 255, 0.08)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         borderRadius: 8,
