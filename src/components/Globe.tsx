@@ -240,6 +240,30 @@ export default function Globe({ onCityClick }: GlobeProps) {
 
     window.addEventListener('globe:flyto', onFlyTo);
 
+    // --- City hover label ---
+    const hoverLabel = document.createElement('div');
+    hoverLabel.style.cssText = `
+      position: fixed;
+      pointer-events: none;
+      z-index: 20;
+      padding: 5px 10px;
+      background: rgba(8, 8, 18, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 190, 80, 0.2);
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.8);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 300;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      transform: translate(-50%, -100%);
+    `;
+    document.body.appendChild(hoverLabel);
+
     // --- City click + hover detection (for Street View) ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -287,9 +311,25 @@ export default function Globe({ onCityClick }: GlobeProps) {
       }
     }
 
+    let hoveredCity: string | null = null;
+
     function onMouseMove(e: MouseEvent) {
       const city = hitTestCities(e.clientX, e.clientY);
       renderer.domElement.style.cursor = city ? 'pointer' : '';
+
+      if (city) {
+        const key = `${city.name}-${city.countryId}`;
+        if (hoveredCity !== key) {
+          hoveredCity = key;
+          hoverLabel.textContent = city.name;
+        }
+        hoverLabel.style.left = `${e.clientX}px`;
+        hoverLabel.style.top = `${e.clientY - 12}px`;
+        hoverLabel.style.opacity = '1';
+      } else if (hoveredCity) {
+        hoveredCity = null;
+        hoverLabel.style.opacity = '0';
+      }
     }
 
     renderer.domElement.addEventListener('mousedown', onMouseDown);
@@ -459,6 +499,7 @@ export default function Globe({ onCityClick }: GlobeProps) {
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       renderer.domElement.removeEventListener('mouseup', onMouseUp);
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
+      document.body.removeChild(hoverLabel);
       unsubscribeStore();
       clearTimeout(interactionTimeout);
       if (sceneRef.current) {

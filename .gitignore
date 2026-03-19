@@ -138,3 +138,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 references/*.mov
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.wrangler/

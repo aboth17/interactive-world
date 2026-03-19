@@ -383,8 +383,8 @@ The build is sequenced so that each phase produces something visually impressive
 **Goal:** Full photo format support, cloud persistence, and guided first-run experience.
 
 #### 5A: Extended Photo Format Support
-1. ⬜ Add .png file support with EXIF/metadata extraction
-2. ⬜ Add .heic file support (iPhone native format) with EXIF GPS extraction
+1. ✅ Add .png file support with EXIF/metadata extraction (exifr handles natively)
+2. ✅ Add .heic file support (iPhone native format) with EXIF GPS extraction (exifr handles natively, file picker updated)
 3. ⬜ Store photos in IndexedDB (local only)
 4. ⬜ Cluster photos by proximity and associate with visits
 5. ⬜ Build the photo thumbnail layer (appears when zoomed into visited cities)
@@ -408,15 +408,71 @@ The build is sequenced so that each phase produces something visually impressive
 19. ⬜ Step 4: "Watch your world light up" — explain fog of war reveal and exploration stats
 20. ⬜ Allow skipping, remember completion state, show a "?" help button to replay
 
-**Exit criteria:** New users understand every feature within 30 seconds. Photos from iPhones (.heic) and all common formats work seamlessly. User data persists across devices via Supabase.
+#### 5D: Shareable Globe Link + OG Preview Image
+21. ⬜ Add a public read-only route (`/globe/:userId`) that renders another user's globe
+22. ⬜ Add a "Share" button that copies the public link to clipboard
+23. ⬜ Public view is read-only — no search, no photo import, no editing. Just the cinematic globe with their visited places glowing
+24. ⬜ Supabase RLS policy: visits rows are publicly readable when user opts into sharing
+25. ⬜ **OG Preview Image**: When the share link is pasted into iMessage/Twitter/Instagram, the link preview shows a server-rendered snapshot of the user's globe — their personal planet with their places glowing against the dark void. This is the single most important growth lever: a dark globe with scattered amber lights is visually arresting in a social feed and doesn't look like any other link preview. Implementation: server-side screenshot via headless browser (Puppeteer on Vercel serverless or Cloudflare Worker), cached to Supabase Storage or R2, served via `<meta property="og:image">` tag on the public route.
+26. ⬜ **Stats in OG image**: Overlay "X countries, Y cities" text on the preview image for social proof
+
+**Exit criteria:** New users understand every feature within 30 seconds. Photos from iPhones (.heic) and all common formats work seamlessly. User data persists across devices via Supabase. Users can share a link to their globe that looks stunning.
 
 ### Phase 6: Polish, Performance, and Advanced Reveal
 
 **Goal:** Production-quality experience with rewarding animations and full geographic fidelity.
 
-#### 6A: Arrival Animation + Sound
-1. ⬜ Build the arrival animation: illuminate-outward pulse from the pin point, spreading across the polygon (~1.5s, sunrise feel)
-2. ⬜ Add arrival chime sound (warm, resonant tone synced to the visual reveal)
+#### 6A: Arrival Animation + Sound (Revised Design)
+
+The first attempt at arrival animation used a simple radial mask wipe — it looked flat and artificial. The revised approach uses multiple layered effects that work with the existing shader pipeline to create something that feels organic and earned.
+
+**The core idea: light propagation, not mask removal.** The fog doesn't disappear — it burns away. Light bleeds through terrain like sunrise over a mountain range.
+
+**Layer 1 — Terrain-aware light propagation (~2s)**
+- Pass a `revealOrigin` (city lat/lng) and `revealProgress` (0→1) uniform to the earth fragment shader
+- Compute distance from each fragment to the reveal origin *on the sphere surface* (great-circle distance, not UV distance)
+- Modulate the reveal threshold with the bump/topology texture: ridges and coastlines resist the light slightly longer, valleys fill first
+- The result: light spreads outward but follows the natural contours of the geography, not a perfect circle
+- Ease curve: fast initial burst (0→0.3 in 400ms), then decelerating spread (0.3→1.0 over 1.6s) — feels like an explosion of light that settles
+
+**Layer 2 — Boundary ember particles**
+- At the advancing edge of the reveal, spawn small particle emitters
+- Particles rise upward (away from globe surface) and fade — like embers from a fire line
+- Warm amber color, additive blending, caught by the bloom post-processing
+- Particle count scales with the polygon's perimeter length (small countries get fewer, large ones more)
+- Particles live ~0.8s each, spawn rate peaks at revealProgress ~0.3 (fastest expansion moment)
+
+**Layer 3 — Color temperature shift**
+- As the fog burns away at a fragment, don't snap directly to full satellite color
+- Brief intermediate state (~300ms): oversaturated warm gold, brighter than final
+- Then ease down to the normal visited brightness (1.4× base)
+- Creates a "flash of heat" at the reveal edge that reads as energy
+
+**Layer 4 — Sound**
+- A warm, resonant chime/tone that begins at the moment of reveal
+- Low rumble undertone that swells with the light propagation
+- Chime pitch subtly varies by latitude (higher pitch for northern locations, lower for southern — subliminal but adds uniqueness to each reveal)
+- Duration matches the visual (~2s), with a tail that rings out over another 1s
+
+**Layer 5 — Camera response**
+- Subtle camera pull: 2-3% zoom toward the revealing area during the animation
+- Micro-shake (< 1px amplitude) at the moment of ignition
+- Both are subliminal — if you notice them consciously, they're too strong
+
+**Implementation notes:**
+- All shader work happens in the existing `earthFragment.glsl` — add `revealOrigin`, `revealProgress`, `revealActive` uniforms
+- Particle system is a separate `Points` geometry (similar to CityEmberGlow but temporary)
+- Animation state managed by a `RevealAnimationManager` that queues reveals (in case user adds multiple places quickly)
+- Performance: the extra distance computation per fragment is ~1ms on modern GPUs. Particles capped at 200.
+
+1. ⬜ Add reveal uniforms to earth shader (origin, progress, active flag)
+2. ⬜ Implement terrain-modulated distance field for organic reveal shape
+3. ⬜ Build color temperature shift (gold flash → settle to normal)
+4. ⬜ Create boundary ember particle system
+5. ⬜ Add reveal sound design (chime + rumble)
+6. ⬜ Add subtle camera response (pull + micro-shake)
+7. ⬜ Build RevealAnimationManager (queue, timing, state machine)
+8. ⬜ Tune all parameters until it feels magical
 
 #### 6B: Tiered Reveal Logic
 3. ⬜ Implement tiered reveal logic (country for small nations, state/region for large nations)
@@ -431,6 +487,67 @@ The build is sequenced so that each phase produces something visually impressive
 10. ⬜ Sound polish: fine-tune crossfades, volumes, timing
 11. ⬜ Final visual polish pass: lighting, colors, animation curves, typography
 12. ⬜ Accessibility basics: keyboard navigation, screen reader landmarks, reduced motion support
+
+### Phase 7: Growth & Engagement Features
+
+**Goal:** Features that solve cold start, add new data lenses, and give users reasons to return and share.
+
+#### 7A: Google Timeline / Location History Import
+
+The biggest friction point is cold start — manually adding dozens of places is tedious. Most users have years of location data sitting in their Google account. One-click import creates an instant, dramatic "your whole life visualized" moment.
+
+**Flow:**
+1. User clicks "Import Google Timeline" in the menu
+2. App shows instructions: go to Google Takeout, download Location History (JSON format)
+3. User drops the downloaded JSON file into the app (same drag-and-drop UX as photo import)
+4. Client-side parsing extracts location records, clusters by city (haversine distance, ~50km radius)
+5. Deduplicates against existing visits
+6. Bulk-adds to visitedStore with `visited_at` timestamps preserved
+7. If arrival animation is implemented, plays a rapid-fire montage sequence (batch reveal)
+
+**Privacy:** Same model as photo import — the Google Takeout file never leaves the device. All parsing is client-side. The app only extracts city/country/coordinates, not the raw location trail.
+
+**Implementation notes:**
+- Google Takeout Location History is a JSON file with `locations[].latitudeE7`, `locations[].longitudeE7`, `locations[].timestamp`
+- Cluster algorithm: group points within 50km haversine radius, take the centroid, resolve to nearest city via existing `getNearestCity()`
+- For large files (>100MB), use streaming JSON parser or chunked processing to avoid blocking the main thread
+- Show progress: "Processing 24,000 location records..." → "Found 47 cities across 12 countries"
+
+1. ⬜ Build Google Timeline file drop/select UI
+2. ⬜ Implement client-side JSON parser for Google Takeout Location History format
+3. ⬜ Cluster location records by proximity (haversine, ~50km radius)
+4. ⬜ Resolve clusters to cities/countries via existing geo utilities
+5. ⬜ Bulk-add to visitedStore with timestamps
+6. ⬜ Show processing progress and results summary
+7. ⬜ Handle edge cases: empty files, wrong format, very large files
+
+#### 7B: Heatmap Mode
+
+A toggle that switches from fog-of-war view to a frequency-based heatmap. Places visited multiple times glow more intensely — frequently visited cities burn white-hot, one-time visits are dim amber. Adds a new lens on your own data without requiring any new input.
+
+**Visual design:**
+- Toggle in the settings dropdown: "Heatmap mode" on/off
+- When active, the ember glow intensity for each city scales with visit count
+- Color gradient: dim amber (1 visit) → bright gold (3-5 visits) → white-hot (10+ visits)
+- Country polygon brightness also scales with the number of distinct cities visited within it
+- The fog of war remains for unvisited areas — heatmap only affects revealed regions
+
+**Data requirements:**
+- Requires `visited_at` timestamps and/or a visit count field
+- Could count visits by the number of distinct `visited_at` dates for a city
+- Or could add a simple `visit_count` column to the visits table
+- Google Timeline import naturally provides multiple visits to the same city
+
+**Implementation:**
+- New uniform `heatmapMode` (bool) in the earth fragment shader
+- Per-city intensity passed via a data texture or attribute on the ember points
+- Smooth transition when toggling (1s crossfade between fog-of-war and heatmap render modes)
+
+1. ⬜ Add visit frequency tracking (count or distinct dates per city)
+2. ⬜ Add heatmap toggle to settings UI
+3. ⬜ Implement intensity-scaled ember glow (color gradient by frequency)
+4. ⬜ Implement intensity-scaled polygon brightness
+5. ⬜ Add smooth crossfade transition between modes
 
 ---
 
